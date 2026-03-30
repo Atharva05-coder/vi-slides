@@ -151,3 +151,134 @@ export const sendGradeNotification = async (
         return { success: false, message: 'Failed to send email', error };
     }
 };
+/**
+ * Send session invitation email to student
+ */
+export const sendSessionInvitation = async (
+    studentEmail: string,
+    studentName: string,
+    sessionTitle: string,
+    sessionCode: string,
+    joinUrl: string,
+    teacherName: string,
+) => {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        console.warn('Email service not configured. Skipping email notification.');
+        return { success: false, message: 'Email service not configured' };
+    }
+
+    const transporter = createTransporter();
+
+    try {
+        await transporter.verify();
+    } catch (verifyError) {
+        console.error('SMTP transporter verification failed:', verifyError);
+        return { success: false, message: 'Failed to verify SMTP transport', error: verifyError };
+    }
+
+    const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {
+                    font-family: 'Inter', Arial, sans-serif;
+                    background-color: #f5f7fb;
+                    margin: 0;
+                    padding: 20px;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 24px;
+                }
+                .content {
+                    padding: 30px;
+                }
+                .session-box {
+                    background: #f0f4ff;
+                    border-left: 4px solid #6366f1;
+                    padding: 20px;
+                    margin: 20px 0;
+                    border-radius: 8px;
+                }
+                .code {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #6366f1;
+                    margin: 10px 0;
+                    letter-spacing: 2px;
+                }
+                .footer {
+                    background: #f8fafc;
+                    padding: 20px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #64748b;
+                }
+                .button {
+                    display: inline-block;
+                    background: #6366f1;
+                    color: white;
+                    padding: 12px 24px;
+                    text-decoration: none;
+                    border-radius: 6px;
+                    margin-top: 20px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎓 New Session Available</h1>
+                </div>
+                <div class="content">
+                    <p>Dear <strong>${studentName}</strong>,</p>
+                    <p>${teacherName} has created a new interactive session for you!</p>
+                    <div class="session-box">
+                        <div style="color: #64748b; font-size: 14px; margin-bottom: 5px;">Session Title</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #1e293b;">${sessionTitle}</div>
+                        <div style="color: #64748b; font-size: 14px; margin: 10px 0 5px;">Session Code</div>
+                        <div class="code">${sessionCode}</div>
+                    </div>
+                    <p>You can join the session using the code above or by scanning the QR code in your dashboard.</p>
+                    <a href="${joinUrl}" class="button">Join Session</a>
+                </div>
+                <div class="footer">
+                    <p>This is an automated email from Vi-SlideS Learning Platform</p>
+                    <p>© ${new Date().getFullYear()} Vi-SlideS. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    try {
+        console.log(`Session invitation: sending to ${studentEmail} for session code ${sessionCode}`);
+        const info = await transporter.sendMail({
+            from: `"Vi-SlideS" <${process.env.SMTP_USER}>`,
+            to: studentEmail,
+            subject: `New Session: ${sessionTitle}`,
+            html: htmlContent,
+        });
+        console.log('Session invitation email sent:', { studentEmail, messageId: info.messageId, accepted: info.accepted });
+
+        return { success: true, message: 'Session invitation sent successfully', info };
+    } catch (error) {
+        console.error('Session invitation email failed:', error);
+        return { success: false, message: 'Failed to send session invitation', error };
+    }
+};
