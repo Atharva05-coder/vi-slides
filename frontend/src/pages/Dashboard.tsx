@@ -591,7 +591,7 @@ const Dashboard: React.FC = () => {
                         sessionCode={session.code}
                         studentName={user?.name || "Student"}
                         date={session.createdAt}
-                        teacherName="Tarun Venkat"
+                        teacherName={session.teacher?.name}
                         onDelete={() => handleDeleteCert(session._id)}
                       />
                     ))}

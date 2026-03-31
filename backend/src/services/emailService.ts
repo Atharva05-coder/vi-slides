@@ -151,6 +151,7 @@ export const sendGradeNotification = async (
         return { success: false, message: 'Failed to send email', error };
     }
 };
+
 /**
  * Send session invitation email to student
  */
@@ -255,7 +256,12 @@ export const sendSessionInvitation = async (
                         <div class="code">${sessionCode}</div>
                     </div>
                     <p>You can join the session using the code above or by scanning the QR code in your dashboard.</p>
-                    <a href="${joinUrl}" class="button">Join Session</a>
+
+                    <!-- ✅ FIXED HERE -->
+                    <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/join/${sessionCode}" class="button">
+                        Join Session
+                    </a>
+
                 </div>
                 <div class="footer">
                     <p>This is an automated email from Vi-SlideS Learning Platform</p>
@@ -274,11 +280,74 @@ export const sendSessionInvitation = async (
             subject: `New Session: ${sessionTitle}`,
             html: htmlContent,
         });
-        console.log('Session invitation email sent:', { studentEmail, messageId: info.messageId, accepted: info.accepted });
+
+        console.log('Session invitation email sent:', { studentEmail, messageId: info.messageId });
 
         return { success: true, message: 'Session invitation sent successfully', info };
     } catch (error) {
         console.error('Session invitation email failed:', error);
         return { success: false, message: 'Failed to send session invitation', error };
     }
+};
+export const sendCertificateEmail = async (
+    studentEmail: string,
+    studentName: string,
+    sessionTitle: string,
+    sessionCode: string,
+    date: string,
+    teacherName: string
+) => {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        console.warn('Email service not configured.');
+        return;
+    }
+
+    const transporter = createTransporter();
+
+    const htmlContent = `
+    <div style="font-family: Arial; background:#1e1e2e; padding:20px;">
+        <div style="max-width:600px;margin:auto;border:2px solid gold;padding:30px;border-radius:12px;color:white;background:linear-gradient(135deg,#1e1e2e,#28283c)">
+            <div style="border:1px solid rgba(255,215,0,0.3);padding:20px;border-radius:8px;text-align:center;">
+                
+                <div style="font-size:40px;">🎓</div>
+
+                <h2 style="color:gold;letter-spacing:2px;">
+                    CERTIFICATE OF PARTICIPATION
+                </h2>
+
+                <p>This certifies that</p>
+
+                <h1 style="font-family:cursive;">
+                    ${studentName}
+                </h1>
+
+                <p>Has successfully participated in:</p>
+
+                <h3 style="color:#a5b4fc;">${sessionTitle}</h3>
+                <p>Session Code: ${sessionCode}</p>
+
+                <table style="width:100%;margin-top:30px;text-align:center;color:white;">
+    <tr>
+        <td>
+            <small style="opacity:0.7;">Date</small>
+            <p style="margin:5px 0;">${new Date(date).toLocaleDateString()}</p>
+        </td>
+        <td>
+            <small style="opacity:0.7;">Instructor</small>
+            <p style="margin:5px 0;">${teacherName}</p>
+        </td>
+    </tr>
+</table>
+    
+            </div>
+        </div>
+    </div>
+    `;
+
+    await transporter.sendMail({
+        from: `"Vi-SlideS" <${process.env.SMTP_USER}>`,
+        to: studentEmail,
+        subject: `🎓 Certificate - ${sessionTitle}`,
+        html: htmlContent
+    });
 };

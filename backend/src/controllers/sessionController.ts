@@ -5,6 +5,7 @@ import Question from '../models/Question';
 import { emitToSession } from '../config/socket';
 import { generateMoodSummary } from '../services/aiService';
 import { sendSessionInvitation } from '../services/emailService';
+import { sendCertificateEmail } from '../services/emailService';
 import QRCode from 'qrcode';
 import os from 'os';
 
@@ -110,6 +111,7 @@ export const createSession = async (req: Request, res: Response): Promise<void> 
       session.qrCodeDataUrl = qrCodeDataUrl;
       session.joinUrl = joinUrl;
       await session.save();
+
     } catch (qrError) {
       console.error('QR code generation error:', qrError);
       // Continue even if QR generation fails
@@ -292,15 +294,44 @@ export const endSession = async (req: Request, res: Response): Promise<void> => 
     session.status = 'ended';
     session.endedAt = new Date();
 
-    // 1. Fetch all questions for this session to generate summary
+    // 1. Fetch all questions
     const questions = await Question.find({ session: session._id });
     const questionTexts = questions.map(q => q.content);
 
-    // 2. Generate Mood Summary via AI (Gemini)
-    // Note: This is an async call but we wait for it to store it in the session record
+    // 2. Generate Mood Summary
     session.moodSummary = await generateMoodSummary(questionTexts);
 
+    // ✅ SAVE SESSION
     await session.save();
+
+    // ✅ SEND CERTIFICATES (FIXED PROPERLY)
+    try {
+      const teacher = await User.findById(session.teacher);
+      const sentEmails = new Set<string>();
+
+      for (const entry of session.attendance) {
+        // ❌ Skip teacher
+        if (entry.email === teacher?.email) continue;
+
+        // ❌ Skip duplicates
+        if (sentEmails.has(entry.email)) continue;
+
+        sentEmails.add(entry.email);
+
+        await sendCertificateEmail(
+          entry.email,
+          entry.name,
+          session.title,
+          session.code,
+          session.endedAt?.toISOString() || new Date().toISOString(),
+          teacher?.name || 'Instructor'
+        );
+      }
+
+      console.log('Certificates sent to students (filtered)');
+    } catch (err) {
+      console.error('Certificate email error:', err);
+    }
 
     // Notify all participants
     emitToSession(session.code, 'session_status_update', { status: 'ended' });
@@ -312,11 +343,12 @@ export const endSession = async (req: Request, res: Response): Promise<void> => 
         title: session.title,
         code: session.code,
         questionCount: questions.length,
-        duration: Math.round((session.endedAt.getTime() - session.createdAt.getTime()) / 60000), // duration in minutes
+        duration: Math.round((session.endedAt.getTime() - session.createdAt.getTime()) / 60000),
         moodSummary: session.moodSummary
       },
       message: 'Session ended successfully'
     });
+
   } catch (error) {
     console.error('End session error:', error);
     res.status(500).json({
@@ -325,7 +357,6 @@ export const endSession = async (req: Request, res: Response): Promise<void> => 
     });
   }
 };
-
 // @desc    Pause or Resume a session
 // @route   PATCH /api/sessions/:id/pause
 // @access  Private (Teacher only)
